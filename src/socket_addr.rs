@@ -1,541 +1,81 @@
-use crate::fmt::{self, Write};
-use crate::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use crate::{
+    DisplayBuffer, IpAddr, Ipv4Addr, Ipv6Addr, Parser, ScionAddr, SocketAddrScion, SocketAddrV4,
+    SocketAddrV6,
+};
+use std::error::Error;
+use std::fmt::{self, Write};
+use std::str::FromStr;
 
-use super::display_buffer::DisplayBuffer;
+pub enum L3Addr {
+    IP(IpAddr),
+    SCION(ScionAddr),
+}
 
-/// An internet socket address, either IPv4 or IPv6.
-///
-/// Internet socket addresses consist of an [IP address], a 16-bit port number, as well
-/// as possibly some version-dependent additional information. See [`SocketAddrV4`]'s and
-/// [`SocketAddrV6`]'s respective documentation for more details.
-///
-/// The size of a `SocketAddr` instance may vary depending on the target operating
-/// system.
-///
-/// [IP address]: IpAddr
-///
-/// # Examples
-///
-/// ```
-/// use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-///
-/// let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-///
-/// assert_eq!("127.0.0.1:8080".parse(), Ok(socket));
-/// assert_eq!(socket.port(), 8080);
-/// assert_eq!(socket.is_ipv4(), true);
-/// ```
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[stable(feature = "rust1", since = "1.0.0")]
+
 pub enum SocketAddr {
     /// An IPv4 socket address.
-    #[stable(feature = "rust1", since = "1.0.0")]
-    V4(#[stable(feature = "rust1", since = "1.0.0")] SocketAddrV4),
+    V4(SocketAddrV4),
     /// An IPv6 socket address.
-    #[stable(feature = "rust1", since = "1.0.0")]
-    V6(#[stable(feature = "rust1", since = "1.0.0")] SocketAddrV6),
-}
+    V6(SocketAddrV6),
 
-/// An IPv4 socket address.
-///
-/// IPv4 socket addresses consist of an [`IPv4` address] and a 16-bit port number, as
-/// stated in [IETF RFC 793].
-///
-/// See [`SocketAddr`] for a type encompassing both IPv4 and IPv6 socket addresses.
-///
-/// The size of a `SocketAddrV4` struct may vary depending on the target operating
-/// system. Do not assume that this type has the same memory layout as the underlying
-/// system representation.
-///
-/// [IETF RFC 793]: https://tools.ietf.org/html/rfc793
-/// [`IPv4` address]: Ipv4Addr
-///
-/// # Examples
-///
-/// ```
-/// use std::net::{Ipv4Addr, SocketAddrV4};
-///
-/// let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080);
-///
-/// assert_eq!("127.0.0.1:8080".parse(), Ok(socket));
-/// assert_eq!(socket.ip(), &Ipv4Addr::new(127, 0, 0, 1));
-/// assert_eq!(socket.port(), 8080);
-/// ```
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-#[stable(feature = "rust1", since = "1.0.0")]
-pub struct SocketAddrV4 {
-    ip: Ipv4Addr,
-    port: u16,
-}
-
-/// An IPv6 socket address.
-///
-/// IPv6 socket addresses consist of an [`IPv6` address], a 16-bit port number, as well
-/// as fields containing the traffic class, the flow label, and a scope identifier
-/// (see [IETF RFC 2553, Section 3.3] for more details).
-///
-/// See [`SocketAddr`] for a type encompassing both IPv4 and IPv6 socket addresses.
-///
-/// The size of a `SocketAddrV6` struct may vary depending on the target operating
-/// system. Do not assume that this type has the same memory layout as the underlying
-/// system representation.
-///
-/// [IETF RFC 2553, Section 3.3]: https://tools.ietf.org/html/rfc2553#section-3.3
-/// [`IPv6` address]: Ipv6Addr
-///
-/// # Examples
-///
-/// ```
-/// use std::net::{Ipv6Addr, SocketAddrV6};
-///
-/// let socket = SocketAddrV6::new(Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
-///
-/// assert_eq!("[2001:db8::1]:8080".parse(), Ok(socket));
-/// assert_eq!(socket.ip(), &Ipv6Addr::new(0x2001, 0xdb8, 0, 0, 0, 0, 0, 1));
-/// assert_eq!(socket.port(), 8080);
-/// ```
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-#[stable(feature = "rust1", since = "1.0.0")]
-pub struct SocketAddrV6 {
-    ip: Ipv6Addr,
-    port: u16,
-    flowinfo: u32,
-    scope_id: u32,
+    SCION(SocketAddrScion),
 }
 
 impl SocketAddr {
-    /// Creates a new socket address from an [IP address] and a port number.
-    ///
-    /// [IP address]: IpAddr
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    ///
-    /// let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-    /// assert_eq!(socket.ip(), IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
-    /// assert_eq!(socket.port(), 8080);
-    /// ```
-    #[stable(feature = "ip_addr", since = "1.7.0")]
-    #[must_use]
-    #[rustc_const_stable(feature = "const_socketaddr", since = "1.69.0")]
-    #[inline]
-    pub const fn new(ip: IpAddr, port: u16) -> SocketAddr {
-        match ip {
-            IpAddr::V4(a) => SocketAddr::V4(SocketAddrV4::new(a, port)),
-            IpAddr::V6(a) => SocketAddr::V6(SocketAddrV6::new(a, port, 0, 0)),
-        }
-    }
-
-    /// Returns the IP address associated with this socket address.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    ///
-    /// let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-    /// assert_eq!(socket.ip(), IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
-    /// ```
-    #[must_use]
-    #[stable(feature = "ip_addr", since = "1.7.0")]
-    #[rustc_const_stable(feature = "const_socketaddr", since = "1.69.0")]
-    #[inline]
-    pub const fn ip(&self) -> IpAddr {
-        match *self {
-            SocketAddr::V4(ref a) => IpAddr::V4(*a.ip()),
-            SocketAddr::V6(ref a) => IpAddr::V6(*a.ip()),
-        }
-    }
-
-    /// Changes the IP address associated with this socket address.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    ///
-    /// let mut socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-    /// socket.set_ip(IpAddr::V4(Ipv4Addr::new(10, 10, 0, 1)));
-    /// assert_eq!(socket.ip(), IpAddr::V4(Ipv4Addr::new(10, 10, 0, 1)));
-    /// ```
-    #[stable(feature = "sockaddr_setters", since = "1.9.0")]
-    #[inline]
-    pub fn set_ip(&mut self, new_ip: IpAddr) {
-        // `match (*self, new_ip)` would have us mutate a copy of self only to throw it away.
-        match (self, new_ip) {
-            (&mut SocketAddr::V4(ref mut a), IpAddr::V4(new_ip)) => a.set_ip(new_ip),
-            (&mut SocketAddr::V6(ref mut a), IpAddr::V6(new_ip)) => a.set_ip(new_ip),
-            (self_, new_ip) => *self_ = Self::new(new_ip, self_.port()),
-        }
-    }
-
-    /// Returns the port number associated with this socket address.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    ///
-    /// let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-    /// assert_eq!(socket.port(), 8080);
-    /// ```
-    #[must_use]
-    #[stable(feature = "rust1", since = "1.0.0")]
-    #[rustc_const_stable(feature = "const_socketaddr", since = "1.69.0")]
-    #[inline]
-    pub const fn port(&self) -> u16 {
-        match *self {
-            SocketAddr::V4(ref a) => a.port(),
-            SocketAddr::V6(ref a) => a.port(),
-        }
-    }
-
-    /// Changes the port number associated with this socket address.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    ///
-    /// let mut socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-    /// socket.set_port(1025);
-    /// assert_eq!(socket.port(), 1025);
-    /// ```
-    #[stable(feature = "sockaddr_setters", since = "1.9.0")]
-    #[inline]
-    pub fn set_port(&mut self, new_port: u16) {
-        match *self {
-            SocketAddr::V4(ref mut a) => a.set_port(new_port),
-            SocketAddr::V6(ref mut a) => a.set_port(new_port),
-        }
-    }
-
-    /// Returns [`true`] if the [IP address] in this `SocketAddr` is an
-    /// [`IPv4` address], and [`false`] otherwise.
-    ///
-    /// [IP address]: IpAddr
-    /// [`IPv4` address]: IpAddr::V4
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    ///
-    /// let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-    /// assert_eq!(socket.is_ipv4(), true);
-    /// assert_eq!(socket.is_ipv6(), false);
-    /// ```
-    #[must_use]
-    #[stable(feature = "sockaddr_checker", since = "1.16.0")]
-    #[rustc_const_stable(feature = "const_socketaddr", since = "1.69.0")]
-    #[inline]
-    pub const fn is_ipv4(&self) -> bool {
-        matches!(*self, SocketAddr::V4(_))
-    }
-
-    /// Returns [`true`] if the [IP address] in this `SocketAddr` is an
-    /// [`IPv6` address], and [`false`] otherwise.
-    ///
-    /// [IP address]: IpAddr
-    /// [`IPv6` address]: IpAddr::V6
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{IpAddr, Ipv6Addr, SocketAddr};
-    ///
-    /// let socket = SocketAddr::new(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 65535, 0, 1)), 8080);
-    /// assert_eq!(socket.is_ipv4(), false);
-    /// assert_eq!(socket.is_ipv6(), true);
-    /// ```
-    #[must_use]
-    #[stable(feature = "sockaddr_checker", since = "1.16.0")]
-    #[rustc_const_stable(feature = "const_socketaddr", since = "1.69.0")]
-    #[inline]
-    pub const fn is_ipv6(&self) -> bool {
-        matches!(*self, SocketAddr::V6(_))
+    pub fn parse_ascii(b: &[u8]) -> Result<Self, AddrParseError> {
+        Parser::new(b).parse_with(|p| p.read_socket_addr(), AddrKind::Socket)
     }
 }
 
-impl SocketAddrV4 {
-    /// Creates a new socket address from an [`IPv4` address] and a port number.
-    ///
-    /// [`IPv4` address]: Ipv4Addr
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV4, Ipv4Addr};
-    ///
-    /// let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080);
-    /// ```
-    #[stable(feature = "rust1", since = "1.0.0")]
-    #[must_use]
-    #[rustc_const_stable(feature = "const_socketaddr", since = "1.69.0")]
-    #[inline]
-    pub const fn new(ip: Ipv4Addr, port: u16) -> SocketAddrV4 {
-        SocketAddrV4 { ip, port }
-    }
-
-    /// Returns the IP address associated with this socket address.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV4, Ipv4Addr};
-    ///
-    /// let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080);
-    /// assert_eq!(socket.ip(), &Ipv4Addr::new(127, 0, 0, 1));
-    /// ```
-    #[must_use]
-    #[stable(feature = "rust1", since = "1.0.0")]
-    #[rustc_const_stable(feature = "const_socketaddr", since = "1.69.0")]
-    #[inline]
-    pub const fn ip(&self) -> &Ipv4Addr {
-        &self.ip
-    }
-
-    /// Changes the IP address associated with this socket address.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV4, Ipv4Addr};
-    ///
-    /// let mut socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080);
-    /// socket.set_ip(Ipv4Addr::new(192, 168, 0, 1));
-    /// assert_eq!(socket.ip(), &Ipv4Addr::new(192, 168, 0, 1));
-    /// ```
-    #[stable(feature = "sockaddr_setters", since = "1.9.0")]
-    #[inline]
-    pub fn set_ip(&mut self, new_ip: Ipv4Addr) {
-        self.ip = new_ip;
-    }
-
-    /// Returns the port number associated with this socket address.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV4, Ipv4Addr};
-    ///
-    /// let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080);
-    /// assert_eq!(socket.port(), 8080);
-    /// ```
-    #[must_use]
-    #[stable(feature = "rust1", since = "1.0.0")]
-    #[rustc_const_stable(feature = "const_socketaddr", since = "1.69.0")]
-    #[inline]
-    pub const fn port(&self) -> u16 {
-        self.port
-    }
-
-    /// Changes the port number associated with this socket address.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV4, Ipv4Addr};
-    ///
-    /// let mut socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080);
-    /// socket.set_port(4242);
-    /// assert_eq!(socket.port(), 4242);
-    /// ```
-    #[stable(feature = "sockaddr_setters", since = "1.9.0")]
-    #[inline]
-    pub fn set_port(&mut self, new_port: u16) {
-        self.port = new_port;
+impl FromStr for SocketAddr {
+    type Err = AddrParseError;
+    fn from_str(s: &str) -> Result<SocketAddr, AddrParseError> {
+        Self::parse_ascii(s.as_bytes())
     }
 }
 
-impl SocketAddrV6 {
-    /// Creates a new socket address from an [`IPv6` address], a 16-bit port number,
-    /// and the `flowinfo` and `scope_id` fields.
-    ///
-    /// For more information on the meaning and layout of the `flowinfo` and `scope_id`
-    /// parameters, see [IETF RFC 2553, Section 3.3].
-    ///
-    /// [IETF RFC 2553, Section 3.3]: https://tools.ietf.org/html/rfc2553#section-3.3
-    /// [`IPv6` address]: Ipv6Addr
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV6, Ipv6Addr};
-    ///
-    /// let socket = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
-    /// ```
-    #[stable(feature = "rust1", since = "1.0.0")]
-    #[must_use]
-    #[rustc_const_stable(feature = "const_socketaddr", since = "1.69.0")]
-    #[inline]
-    pub const fn new(ip: Ipv6Addr, port: u16, flowinfo: u32, scope_id: u32) -> SocketAddrV6 {
-        SocketAddrV6 { ip, port, flowinfo, scope_id }
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AddrKind {
+    L3Addr,
+    Scion, // -> ScionAddr
+    Ip,    // -> IpAddr (either one of the below 2x)
+    Ipv4,
+    Ipv6,
 
-    /// Returns the IP address associated with this socket address.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV6, Ipv6Addr};
-    ///
-    /// let socket = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
-    /// assert_eq!(socket.ip(), &Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
-    /// ```
-    #[must_use]
-    #[stable(feature = "rust1", since = "1.0.0")]
-    #[rustc_const_stable(feature = "const_socketaddr", since = "1.69.0")]
-    #[inline]
-    pub const fn ip(&self) -> &Ipv6Addr {
-        &self.ip
-    }
+    Socket,      // L4Addr  -> SocketAddr   (either one of the below 3x)
+    SocketScion, // -> SocketAddrScion
+    SocketV4,
+    SocketV6,
+}
 
-    /// Changes the IP address associated with this socket address.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV6, Ipv6Addr};
-    ///
-    /// let mut socket = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
-    /// socket.set_ip(Ipv6Addr::new(76, 45, 0, 0, 0, 0, 0, 0));
-    /// assert_eq!(socket.ip(), &Ipv6Addr::new(76, 45, 0, 0, 0, 0, 0, 0));
-    /// ```
-    #[stable(feature = "sockaddr_setters", since = "1.9.0")]
-    #[inline]
-    pub fn set_ip(&mut self, new_ip: Ipv6Addr) {
-        self.ip = new_ip;
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddrParseError(pub AddrKind);
 
-    /// Returns the port number associated with this socket address.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV6, Ipv6Addr};
-    ///
-    /// let socket = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
-    /// assert_eq!(socket.port(), 8080);
-    /// ```
-    #[must_use]
-    #[stable(feature = "rust1", since = "1.0.0")]
-    #[rustc_const_stable(feature = "const_socketaddr", since = "1.69.0")]
-    #[inline]
-    pub const fn port(&self) -> u16 {
-        self.port
-    }
-
-    /// Changes the port number associated with this socket address.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV6, Ipv6Addr};
-    ///
-    /// let mut socket = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 0);
-    /// socket.set_port(4242);
-    /// assert_eq!(socket.port(), 4242);
-    /// ```
-    #[stable(feature = "sockaddr_setters", since = "1.9.0")]
-    #[inline]
-    pub fn set_port(&mut self, new_port: u16) {
-        self.port = new_port;
-    }
-
-    /// Returns the flow information associated with this address.
-    ///
-    /// This information corresponds to the `sin6_flowinfo` field in C's `netinet/in.h`,
-    /// as specified in [IETF RFC 2553, Section 3.3].
-    /// It combines information about the flow label and the traffic class as specified
-    /// in [IETF RFC 2460], respectively [Section 6] and [Section 7].
-    ///
-    /// [IETF RFC 2553, Section 3.3]: https://tools.ietf.org/html/rfc2553#section-3.3
-    /// [IETF RFC 2460]: https://tools.ietf.org/html/rfc2460
-    /// [Section 6]: https://tools.ietf.org/html/rfc2460#section-6
-    /// [Section 7]: https://tools.ietf.org/html/rfc2460#section-7
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV6, Ipv6Addr};
-    ///
-    /// let socket = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 10, 0);
-    /// assert_eq!(socket.flowinfo(), 10);
-    /// ```
-    #[must_use]
-    #[stable(feature = "rust1", since = "1.0.0")]
-    #[rustc_const_stable(feature = "const_socketaddr", since = "1.69.0")]
-    #[inline]
-    pub const fn flowinfo(&self) -> u32 {
-        self.flowinfo
-    }
-
-    /// Changes the flow information associated with this socket address.
-    ///
-    /// See [`SocketAddrV6::flowinfo`]'s documentation for more details.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV6, Ipv6Addr};
-    ///
-    /// let mut socket = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 10, 0);
-    /// socket.set_flowinfo(56);
-    /// assert_eq!(socket.flowinfo(), 56);
-    /// ```
-    #[stable(feature = "sockaddr_setters", since = "1.9.0")]
-    #[inline]
-    pub fn set_flowinfo(&mut self, new_flowinfo: u32) {
-        self.flowinfo = new_flowinfo;
-    }
-
-    /// Returns the scope ID associated with this address.
-    ///
-    /// This information corresponds to the `sin6_scope_id` field in C's `netinet/in.h`,
-    /// as specified in [IETF RFC 2553, Section 3.3].
-    ///
-    /// [IETF RFC 2553, Section 3.3]: https://tools.ietf.org/html/rfc2553#section-3.3
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV6, Ipv6Addr};
-    ///
-    /// let socket = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 78);
-    /// assert_eq!(socket.scope_id(), 78);
-    /// ```
-    #[must_use]
-    #[stable(feature = "rust1", since = "1.0.0")]
-    #[rustc_const_stable(feature = "const_socketaddr", since = "1.69.0")]
-    #[inline]
-    pub const fn scope_id(&self) -> u32 {
-        self.scope_id
-    }
-
-    /// Changes the scope ID associated with this socket address.
-    ///
-    /// See [`SocketAddrV6::scope_id`]'s documentation for more details.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::net::{SocketAddrV6, Ipv6Addr};
-    ///
-    /// let mut socket = SocketAddrV6::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1), 8080, 0, 78);
-    /// socket.set_scope_id(42);
-    /// assert_eq!(socket.scope_id(), 42);
-    /// ```
-    #[stable(feature = "sockaddr_setters", since = "1.9.0")]
-    #[inline]
-    pub fn set_scope_id(&mut self, new_scope_id: u32) {
-        self.scope_id = new_scope_id;
+impl fmt::Display for AddrParseError {
+    #[allow(deprecated, deprecated_in_future)]
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.write_str(self.description())
     }
 }
 
-#[stable(feature = "ip_from_ip", since = "1.16.0")]
+impl Error for AddrParseError {
+    #[allow(deprecated)]
+    fn description(&self) -> &str {
+        match self.0 {
+            AddrKind::Ip => "invalid IP address syntax",
+            AddrKind::Ipv4 => "invalid IPv4 address syntax",
+            AddrKind::Ipv6 => "invalid IPv6 address syntax",
+            AddrKind::Scion => "invalid Scion address syntax",
+            AddrKind::SocketScion => "invalid ScionSocket address syntax",
+            AddrKind::L3Addr => "invalid L3Address syntax",
+            AddrKind::Socket => "invalid socket address syntax",
+            AddrKind::SocketV4 => "invalid IPv4 socket address syntax",
+            AddrKind::SocketV6 => "invalid IPv6 socket address syntax",
+        }
+    }
+}
+
 impl From<SocketAddrV4> for SocketAddr {
     /// Converts a [`SocketAddrV4`] into a [`SocketAddr::V4`].
     #[inline]
@@ -544,7 +84,6 @@ impl From<SocketAddrV4> for SocketAddr {
     }
 }
 
-#[stable(feature = "ip_from_ip", since = "1.16.0")]
 impl From<SocketAddrV6> for SocketAddr {
     /// Converts a [`SocketAddrV6`] into a [`SocketAddr::V6`].
     #[inline]
@@ -553,7 +92,6 @@ impl From<SocketAddrV6> for SocketAddr {
     }
 }
 
-#[stable(feature = "addr_from_into_ip", since = "1.17.0")]
 impl<I: Into<IpAddr>> From<(I, u16)> for SocketAddr {
     /// Converts a tuple struct (Into<[`IpAddr`]>, `u16`) into a [`SocketAddr`].
     ///
@@ -562,83 +100,145 @@ impl<I: Into<IpAddr>> From<(I, u16)> for SocketAddr {
     ///
     /// `u16` is treated as port of the newly created [`SocketAddr`].
     fn from(pieces: (I, u16)) -> SocketAddr {
-        SocketAddr::new(pieces.0.into(), pieces.1)
+        SocketAddr::new_ip(pieces.0.into(), pieces.1)
     }
 }
-
-#[stable(feature = "rust1", since = "1.0.0")]
-impl fmt::Display for SocketAddr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            SocketAddr::V4(ref a) => a.fmt(f),
-            SocketAddr::V6(ref a) => a.fmt(f),
-        }
+/*
+impl<I: Into<ScionAddr>> From<(I, u16)> for SocketAddr {
+    fn from(pieces: (I, u16)) -> SocketAddr {
+        SocketAddr::new_scion(pieces.0.into(), pieces.1)
     }
-}
+}*/
 
-#[stable(feature = "rust1", since = "1.0.0")]
 impl fmt::Debug for SocketAddr {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self, fmt)
     }
 }
 
-#[stable(feature = "rust1", since = "1.0.0")]
-impl fmt::Display for SocketAddrV4 {
+impl SocketAddr {
+    #[must_use]
+    #[inline]
+    pub fn new_ip(ip: IpAddr, port: u16) -> SocketAddr {
+        match ip {
+            IpAddr::V4(a) => SocketAddr::V4(SocketAddrV4::new(a, port)),
+            IpAddr::V6(a) => SocketAddr::V6(SocketAddrV6::new(a, port, 0, 0)),
+        }
+    }
+
+    pub fn new_scion(ia: u64, ip: IpAddr, port: u16) -> SocketAddr {
+        SocketAddr::SCION(SocketAddrScion::new(ia, ip, port))
+    }
+
+    #[must_use]
+    #[inline]
+    pub fn host(&self) -> IpAddr {
+        match &self {
+            SocketAddr::SCION(addr) => *addr.host(),
+            SocketAddr::V4(ref a) => IpAddr::V4(*a.ip()),
+
+            SocketAddr::V6(ref a) => IpAddr::V6(*a.ip()),
+        }
+    }
+
+    #[inline]
+    pub fn set_ip(&mut self, new_ip: IpAddr) {
+        // `match (*self, new_ip)` would have us mutate a copy of self only to throw it away.
+        match (self, new_ip) {
+            (&mut SocketAddr::V4(ref mut a), IpAddr::V4(new_ip)) => a.set_ip(new_ip),
+            (&mut SocketAddr::V6(ref mut a), IpAddr::V6(new_ip)) => a.set_ip(new_ip),
+            (&mut SocketAddr::SCION(ref mut a), _) => a.set_host(new_ip),
+
+            (self_, new_ip) => *self_ = Self::new_ip(new_ip, self_.port()),
+        }
+    }
+
+    pub fn set_host(&mut self, new_host: L3Addr) {
+        match new_host {
+            L3Addr::SCION(ScionAddr { ia, host }) => match (self) {
+                &mut SocketAddr::SCION(ref mut a) => {
+                    a.set_host(host);
+                }
+                (&mut SocketAddr::V4(ref mut a)) => match host {
+                    IpAddr::V4(h) => a.set_ip(h),
+                    _ => {}
+                },
+                (&mut SocketAddr::V6(ref mut a)) => match host {
+                    IpAddr::V6(h) => a.set_ip(h),
+                    _ => {}
+                },
+            },
+            L3Addr::IP(new_ip) => match (self, new_ip) {
+                (&mut SocketAddr::V4(ref mut a), IpAddr::V4(new_ip)) => a.set_ip(new_ip),
+                (&mut SocketAddr::V6(ref mut a), IpAddr::V6(new_ip)) => a.set_ip(new_ip),
+                (&mut SocketAddr::SCION(ref mut a), _) => a.set_host(new_ip),
+
+                (self_, new_ip) => *self_ = Self::new_ip(new_ip, self_.port()),
+            },
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn port(&self) -> u16 {
+        match *self {
+            SocketAddr::V4(ref a) => a.port(),
+            SocketAddr::V6(ref a) => a.port(),
+            SocketAddr::SCION(ref a) => a.port(),
+        }
+    }
+
+    #[inline]
+    pub fn set_port(&mut self, new_port: u16) {
+        match *self {
+            SocketAddr::V4(ref mut a) => a.set_port(new_port),
+            SocketAddr::V6(ref mut a) => a.set_port(new_port),
+            SocketAddr::SCION(ref mut a) => a.set_port(new_port),
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    pub fn is_ipv4(&self) -> bool {
+        matches!(*self, SocketAddr::V4(_))
+    }
+
+    #[must_use]
+    #[inline]
+    pub fn is_ipv6(&self) -> bool {
+        matches!(*self, SocketAddr::V6(_))
+    }
+}
+
+impl From<SocketAddrScion> for SocketAddr {
+    /// Converts a [`SocketAddrScion`] into a [`SocketAddr::SCION`].
+    #[inline]
+    fn from(sock: SocketAddrScion) -> SocketAddr {
+        SocketAddr::SCION(sock)
+    }
+}
+
+impl fmt::Display for SocketAddr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // If there are no alignment requirements, write the socket address directly to `f`.
-        // Otherwise, write it to a local buffer and then use `f.pad`.
-        if f.precision().is_none() && f.width().is_none() {
-            write!(f, "{}:{}", self.ip(), self.port())
-        } else {
-            const LONGEST_IPV4_SOCKET_ADDR: &str = "255.255.255.255:65536";
-
-            let mut buf = DisplayBuffer::<{ LONGEST_IPV4_SOCKET_ADDR.len() }>::new();
-            // Buffer is long enough for the longest possible IPv4 socket address, so this should never fail.
-            write!(buf, "{}:{}", self.ip(), self.port()).unwrap();
-
-            f.pad(buf.as_str())
+        match *self {
+            SocketAddr::V4(ref a) => a.fmt(f),
+            SocketAddr::V6(ref a) => a.fmt(f),
+            SocketAddr::SCION(ref a) => a.fmt(f),
         }
     }
 }
 
-#[stable(feature = "rust1", since = "1.0.0")]
-impl fmt::Debug for SocketAddrV4 {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self, fmt)
+impl From<std::net::SocketAddr> for SocketAddr{
+    fn from(sock6: std::net::SocketAddr) -> SocketAddr
+    {
+        SocketAddr::from_str(&sock6.to_string() ).unwrap()
     }
 }
 
-#[stable(feature = "rust1", since = "1.0.0")]
-impl fmt::Display for SocketAddrV6 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // If there are no alignment requirements, write the socket address directly to `f`.
-        // Otherwise, write it to a local buffer and then use `f.pad`.
-        if f.precision().is_none() && f.width().is_none() {
-            match self.scope_id() {
-                0 => write!(f, "[{}]:{}", self.ip(), self.port()),
-                scope_id => write!(f, "[{}%{}]:{}", self.ip(), scope_id, self.port()),
-            }
-        } else {
-            const LONGEST_IPV6_SOCKET_ADDR: &str =
-                "[ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff%4294967296]:65536";
-
-            let mut buf = DisplayBuffer::<{ LONGEST_IPV6_SOCKET_ADDR.len() }>::new();
-            match self.scope_id() {
-                0 => write!(buf, "[{}]:{}", self.ip(), self.port()),
-                scope_id => write!(buf, "[{}%{}]:{}", self.ip(), scope_id, self.port()),
-            }
-            // Buffer is long enough for the longest possible IPv6 socket address, so this should never fail.
-            .unwrap();
-
-            f.pad(buf.as_str())
-        }
-    }
-}
-
-#[stable(feature = "rust1", since = "1.0.0")]
-impl fmt::Debug for SocketAddrV6 {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self, fmt)
+impl Into<std::net::SocketAddr> for SocketAddr
+{
+    fn into(self) -> std::net::SocketAddr
+    {
+        std::net::SocketAddr::from_str( &self.to_string() ).unwrap()
     }
 }

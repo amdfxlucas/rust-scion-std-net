@@ -1,0 +1,17 @@
+[package]
+name = "snet"
+version = "0.0.1"
+
+[dependencies]
+regex = "1" #{version = "1.10"}
+libc = "0.2.151"
+
+#[dependencies.libc]
+#version = "0.2.151"
+#default-features = false
+
+
+#[build-dependencies]
+#libc = "0.2.151"
+
+#regex = {version = "1.10"}
