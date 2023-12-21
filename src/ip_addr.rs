@@ -16,6 +16,20 @@ impl From<std::net::IpAddr> for IpAddr{
     }
 }
 
+impl From<std::net::Ipv4Addr> for IpAddr{
+    fn from(ip: std::net::Ipv4Addr) -> IpAddr
+    {
+        IpAddr::from_str(&ip.to_string() ).unwrap()
+    }
+}
+
+impl From<std::net::Ipv6Addr> for IpAddr{
+    fn from(ip: std::net::Ipv6Addr) -> IpAddr
+    {
+        IpAddr::from_str(&ip.to_string() ).unwrap()
+    }
+}
+
 impl Into<std::net::IpAddr> for IpAddr
 {
     fn into(self) -> std::net::IpAddr

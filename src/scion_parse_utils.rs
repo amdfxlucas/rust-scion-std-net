@@ -1,27 +1,28 @@
 use crate::{Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::{str::FromStr, convert::TryInto};
+use std::{convert::TryInto, str::FromStr};
 
 extern crate regex;
 use self::regex::Regex;
 
 fn tokenize(s: &str, re: &Regex) -> Vec<String> {
-    re.split(s).filter(|s| !s.is_empty()).map(String::from).collect()
+    re.split(s)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect()
 }
-
-
 
 pub fn as_from_dotted_hex(s: &str) -> u64 {
     let re = Regex::new(r"[:]+").unwrap();
     let token: Vec<_> = tokenize(s, &re);
-    println!("{:?}",token);
+    // println!("{:?}",token);
 
     let hex_str: String = token
         .iter()
-        .map(|t| pad_to_4( &t.to_string()))
+        .map(|t| pad_to_4(&t.to_string()))
         .collect::<Vec<String>>()
         .concat();
-        
-        println!("{}",hex_str);
+
+    //println!("{}",hex_str);
 
     u64::from_str_radix(&hex_str, 16).unwrap()
 }
@@ -66,17 +67,15 @@ pub fn as_to_dotted_hex(as_num: AS_t) -> String {
     result
 }
 
+const IPV6_ADDR_REGEX: &str =
+    r"((([0-9A-Fa-f]{1,4}:){1,6}:)|(([0-9A-Fa-f]{1,4}:){7}))([0-9A-Fa-f]{1,4})";
 
-const IPV6_ADDR_REGEX: &str = r"((([0-9A-Fa-f]{1,4}:){1,6}:)|(([0-9A-Fa-f]{1,4}:){7}))([0-9A-Fa-f]{1,4})";
-
-pub fn as_from_ia( ia: u64) -> u64
-{
-    (ia<<16) >> 16
+pub fn as_from_ia(ia: u64) -> u64 {
+    (ia << 16) >> 16
 }
 
-pub fn isd_from_ia( ia: u64) -> u16
-{
-    (ia >> 48 ).try_into().unwrap()
+pub fn isd_from_ia(ia: u64) -> u16 {
+    (ia >> 48).try_into().unwrap()
 }
 
 /*
@@ -113,10 +112,9 @@ fn is_ipv6_address(s: &str) -> bool {
 }
 
 pub fn parse_scion_impl(host_scion_addr: &str, port_str: &str) -> (IA_t, ISD_t, AS_t, String, u16) {
-    let re = regex::Regex::new(
-        r"^(?:(\d+)-([\d:A-Fa-f]+)),(?:\[([^\]]+)\]|([^\[\]:]+))(?::(\d+))?$",
-    )
-    .unwrap();
+    let re =
+        regex::Regex::new(r"^(?:(\d+)-([\d:A-Fa-f]+)),(?:\[([^\]]+)\]|([^\[\]:]+))(?::(\d+))?$")
+            .unwrap();
     let captures = re.captures(host_scion_addr).unwrap();
 
     println!("{}", captures[0].len());
@@ -125,7 +123,7 @@ pub fn parse_scion_impl(host_scion_addr: &str, port_str: &str) -> (IA_t, ISD_t, 
 
     let isd: ISD_t = captures[1].parse().unwrap();
     let as_str = &captures[2];
-    let as_num = as_from_ia( as_from_dotted_hex( &captures[2]));
+    let as_num = as_from_ia(as_from_dotted_hex(&captures[2]));
 
     let host = if let Some(ipv6) = captures.get(3) {
         ipv6.as_str().to_string()
@@ -139,7 +137,7 @@ pub fn parse_scion_impl(host_scion_addr: &str, port_str: &str) -> (IA_t, ISD_t, 
         port_str.parse().unwrap()
     };
 
-    (make_ia( isd ,as_num), isd, as_num, host, port)
+    (make_ia(isd, as_num), isd, as_num, host, port)
 }
 
 fn pad_to_4(x: &str) -> String {

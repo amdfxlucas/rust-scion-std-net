@@ -4,7 +4,7 @@ use std::str::FromStr;
 use crate::{IpAddr, Ipv4Addr, Ipv6Addr,SocketAddrScion, SocketAddrV6, SocketAddrV4, Parser};
 use crate::scion_parse_utils::{ make_ia ,as_to_dotted_hex, as_from_ia, isd_from_ia};
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash,Ord,PartialOrd)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash,Ord,PartialOrd,Debug)]
 
 pub struct ScionAddr {
   pub  ia: u64,

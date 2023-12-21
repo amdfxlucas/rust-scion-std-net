@@ -245,7 +245,7 @@ impl<'a> Parser<'a> {
             // why is this not the same :(  this is really worrying
                 let as_string = format!("{:04x}:{:04x}:{:04x}",groups[0],groups[1],groups[2]);
 
-                println!("as_string: {}", as_string);
+               // println!("as_string: {}", as_string);
 
            Some(as_from_dotted_hex(&as_string) )
 
@@ -261,7 +261,7 @@ impl<'a> Parser<'a> {
 
             let _as = read_AS(p)?;
 
-            println!("as: {}",_as);
+       //     println!("as: {}",_as);
 
             p.read_given_char(',')?;
 
