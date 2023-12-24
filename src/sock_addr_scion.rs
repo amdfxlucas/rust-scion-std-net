@@ -16,8 +16,8 @@ impl std::fmt::Display for SocketAddrScion {
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 
 pub struct SocketAddrScion {
-  pub(crate) addr: ScionAddr,
-     pub(crate) port: u16,
+  pub addr: ScionAddr,
+     pub port: u16,
 }
 
 
@@ -76,5 +76,11 @@ impl SocketAddrScion {
     #[inline]
     pub fn set_port(&mut self, new_port: u16) {
         self.port = new_port;
+    }
+}
+
+impl Into<ScionAddr> for SocketAddrScion {
+    fn into(self) -> ScionAddr {
+        self.addr.clone()
     }
 }
