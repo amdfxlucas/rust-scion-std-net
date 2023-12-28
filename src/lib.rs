@@ -4,18 +4,20 @@
 
 // #![feature(maybe_uninit_uninit_array)]
 extern crate libc;
-pub use self::ip_addr::{IpAddr};
-pub use self::ip_v4_addr::{ Ipv4Addr};
-pub use self::ip_v6_addr::{ Ipv6Addr , Ipv6MulticastScope };
-pub use self::scion_addr::{ ScionAddr};
+pub use self::ip_addr::IpAddr as IpAddr;
+pub use self::ip_v4_addr::Ipv4Addr as Ipv4Addr;
+pub use self::ip_v6_addr::Ipv6Addr;
+pub use self::ip_v6_addr::Ipv6MulticastScope as Ipv6MulticastScope;
+pub use self::scion_addr::ScionAddr as ScionAddr;
 
-pub use self::socket_addr::AddrParseError;
+pub use self::socket_addr::AddrParseError as AddrParseError;
 
-pub use self::socket_addr::{SocketAddr ,AddrKind};
-pub use self::sock_addr_scion::{ SocketAddrScion};
+pub use self::socket_addr::SocketAddr as SocketAddr;
+pub use self::socket_addr::AddrKind as AddrKind;
+pub use self::sock_addr_scion::SocketAddrScion as SocketAddrScion;
 
-pub use self::sock_addr_v6::{SocketAddrV6};
-pub use self::sock_addr_v4::{SocketAddrV4};
+pub use self::sock_addr_v6::SocketAddrV6 as SocketAddrV6;
+pub use self::sock_addr_v4::SocketAddrV4 as SocketAddrV4;
 pub use self::scion_parse_utils::*;
 pub use self::parser::*;
 pub use self::display_buffer::*;
