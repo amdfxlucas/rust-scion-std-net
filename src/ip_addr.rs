@@ -48,7 +48,12 @@ pub enum IpAddr {
     V6( Ipv6Addr),
 }
 
-
+impl Default for IpAddr
+{
+    fn default() -> Self {
+        Self::V4(Ipv4Addr::default())
+    }
+}
 
 
 impl IpAddr {

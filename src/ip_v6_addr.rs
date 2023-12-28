@@ -11,6 +11,13 @@ pub struct Ipv6Addr {
   pub(crate)  octets: [u8; 16],
 }
 
+
+impl Default for Ipv6Addr{
+    fn default() -> Self {
+        Self{ octets: [0;16]}
+    }
+}
+
 impl From<std::net::Ipv6Addr> for Ipv6Addr{
     fn from(ip: std::net::Ipv6Addr) -> Ipv6Addr
     {

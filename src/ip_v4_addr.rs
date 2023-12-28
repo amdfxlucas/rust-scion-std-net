@@ -10,6 +10,12 @@ pub struct Ipv4Addr {
     octets: [u8; 4],
 }
 
+impl Default for Ipv4Addr{
+    fn default() -> Self {
+     Self{   octets: [0,0,0,0] }
+    }
+}
+
 impl From<std::net::Ipv4Addr> for Ipv4Addr{
     fn from(ip: std::net::Ipv4Addr) -> Ipv4Addr
     {

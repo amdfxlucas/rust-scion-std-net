@@ -20,6 +20,11 @@ pub struct SocketAddrScion {
      pub port: u16,
 }
 
+impl Default for SocketAddrScion{
+    fn default() -> Self {
+        Self{ addr: ScionAddr::default(), port: 0}
+    }
+}
 
 
 impl SocketAddrScion {

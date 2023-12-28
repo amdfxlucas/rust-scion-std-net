@@ -11,6 +11,11 @@ pub struct ScionAddr {
     pub host: IpAddr,
 }
 
+impl Default for ScionAddr{
+    fn default() -> Self {
+        Self{ia: 0, host: IpAddr::default()}
+    }
+}
 
 impl ScionAddr
 {
