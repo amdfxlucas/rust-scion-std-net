@@ -1,5 +1,5 @@
 [package]
-name = "snet"
+name = "scionnet"
 version = "0.0.1"
 description = "An std::net fork with support for SCION addresses"
 license = "MIT OR Apache-2.0"

@@ -1,6 +1,6 @@
-extern crate snet;
+extern crate scionnet;
 
-use snet::{Ipv4Addr};
+use scionnet::{Ipv4Addr};
 
 
 fn main() {
