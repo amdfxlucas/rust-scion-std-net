@@ -1,6 +1,8 @@
 [package]
 name = "snet"
 version = "0.0.1"
+description = "An std::net fork with support for SCION addresses"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 regex = "1" #{version = "1.10"}
