@@ -3,12 +3,15 @@
 //! This module is "publicly exported" through the `FromStr` implementations
 //! below.
 
+use crate::scion_parse_utils::{as_from_dotted_hex, make_ia};
+use crate::{
+    AddrKind, AddrParseError, IpAddr, Ipv4Addr, Ipv6Addr, ScionAddr, SocketAddr, SocketAddrScion,
+    SocketAddrV4, SocketAddrV6,
+};
 use std::convert::TryInto;
 use std::error::Error;
 use std::fmt;
-use crate::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6 , ScionAddr, SocketAddrScion, AddrParseError, AddrKind};
 use std::str::FromStr;
-use crate::scion_parse_utils::{make_ia, as_from_dotted_hex};
 
 trait ReadNumberHelper: Sized {
     const ZERO: Self;
@@ -38,7 +41,7 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub(crate) fn  new(input: &'a [u8]) -> Parser<'a> {
+    pub(crate) fn new(input: &'a [u8]) -> Parser<'a> {
         Parser { state: input }
     }
 
@@ -57,7 +60,7 @@ impl<'a> Parser<'a> {
 
     /// Run a parser, but fail if the entire input wasn't consumed.
     /// Doesn't run atomically.
-   pub(crate) fn parse_with<T, F>(&mut self, inner: F, kind: AddrKind) -> Result<T, AddrParseError>
+    pub(crate) fn parse_with<T, F>(&mut self, inner: F, kind: AddrKind) -> Result<T, AddrParseError>
     where
         F: FnOnce(&mut Parser<'_>) -> Option<T>,
     {
@@ -82,7 +85,8 @@ impl<'a> Parser<'a> {
     /// Read the next character from the input if it matches the target.
     fn read_given_char(&mut self, target: char) -> Option<()> {
         self.read_atomically(|p| {
-            p.read_char().and_then(|c| if c == target { Some(()) } else { None })
+            p.read_char()
+                .and_then(|c| if c == target { Some(()) } else { None })
         })
     }
 
@@ -154,8 +158,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    
-
     /// Read an IPv6 Address.
     pub(crate) fn read_ipv6_addr(&mut self) -> Option<Ipv6Addr> {
         /// Read a chunk of an IPv6 address into `groups`. Returns the number
@@ -223,71 +225,92 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub(crate) fn read_scion_addr(& mut self) -> Option<ScionAddr>
-    {
+    pub(crate) fn read_scion_addr(&mut self) -> Option<ScionAddr> {
+        /* valid AS numbers have:
+           - 2x colon ':' and 3x groups of max 4x hex digits i.e. 'ffaa:1:1067'
+           - no colon and 1x group of max 4x hex digits
+        */
+        fn read_AS(p: &mut Parser<'_>) -> Option<u64> {
+            let mut short_as: bool = false;
 
-        fn read_AS( p:  &mut Parser<'_>) -> Option<u64>
-        {    p.read_atomically(|p| {
-            let mut groups:[u32;3] = [0; 3];
+            let mut n: u8 = 0;
+            p.read_atomically(|p| {
+                let mut groups: [u32; 3] = [0; 3];
 
-            for (i, slot) in groups.iter_mut().enumerate() {
-                *slot = p.read_separator(':', i, |p| {
-                    
-                    p.read_number(16, Some(4), true)
-                })?;
-            }
-          //  println!("{:?}",groups);
-            //let as_ : u64 = ( (( groups[0]  <<16 as u64) | (groups[1] <<8 as u64)) as u64| ( groups[2]) as u64 ) as u64 ;
-           /* let as_ : u64 = ( (( (groups[0]  as u64) <<16) | ((groups[1] as u64 )<<8 )) as u64| ( groups[2]) as u64 ) as u64 ;           
+                for (i, slot) in groups.iter_mut().enumerate() {
+                    match p.read_separator(':', i, |p| p.read_number::<u32>(16, Some(4), true)) {
+                        Some(token) => {
+                            n += 1;
+                            *slot = token;
+                        }
+                        None => {
+                            if n == 1 {
+                                short_as = true;
+                                break;
+                            }
+                        }
+                    }
+                }
 
-            Some(as_) */
+                if n == 2 {
+                    // this is an erroneous AS number of kind 'stuv:wxyz'
+                    println!("IS_SHORT_AS");
+                    return None;
+                }
 
-            // why is this not the same :(  this is really worrying
-                let as_string = format!("{:04x}:{:04x}:{:04x}",groups[0],groups[1],groups[2]);
+                //  println!("{:?}",groups);
+                //let as_ : u64 = ( (( groups[0]  <<16 as u64) | (groups[1] <<8 as u64)) as u64| ( groups[2]) as u64 ) as u64 ;
+                /* let as_ : u64 = ( (( (groups[0]  as u64) <<16) | ((groups[1] as u64 )<<8 )) as u64| ( groups[2]) as u64 ) as u64 ;
 
-               // println!("as_string: {}", as_string);
+                Some(as_) */
 
-           Some(as_from_dotted_hex(&as_string) )
+                // why is this not the same :(  this is really worrying
+                let as_string = if !short_as {
+                    format!("{:04x}:{:04x}:{:04x}", groups[0], groups[1], groups[2])
+                } else {
+                    format!("{:04x}:{:04x}:{:04x}", 0, 0, groups[0])
+                };
 
-        }) 
-    }
+                println!("as_string: {}", as_string);
 
-        self.read_atomically(|p|{ 
+                Some(as_from_dotted_hex(&as_string))
+            })
+        }
+
+        self.read_atomically(|p| {
             // is the ISD really encoded as a decimal Nr?!
-            let isd = p.read_number(10, Some(6),true )?;
-          //  println!("isd: {}",isd);
+            let isd = p.read_number(10, Some(6), true)?;
+            //  println!("isd: {}",isd);
 
             p.read_given_char('-')?;
 
             let _as = read_AS(p)?;
 
-       //     println!("as: {}",_as);
+            //     println!("as: {}",_as);
 
             p.read_given_char(',')?;
 
             p.read_given_char('[');
-            let host = p.read_ipv4_addr().map(IpAddr::V4).or_else( 
-                ||{ 
-                  //  p.read_given_char('[');
-               let res = //     p.read_ipv4_addr().map(IpAddr::V4).or_else(
+            let host = p.read_ipv4_addr().map(IpAddr::V4).or_else(|| {
+                //  p.read_given_char('[');
+                let res = //     p.read_ipv4_addr().map(IpAddr::V4).or_else(
                     (||{p.read_ipv6_addr().map(IpAddr::V6)})();
-                    //);
-                  //  p.read_given_char(']');
+                //);
+                //  p.read_given_char(']');
                 res
-
-            }
-            );
+            });
             p.read_given_char(']');
             // let port = p.read_port();
 
-            Some( ScionAddr::new( make_ia(isd,_as), host? ) )
-
+            Some(ScionAddr::new(make_ia(isd, _as), host?))
         })
     }
 
     /// Read an IP Address, either IPv4 or IPv6.
     fn read_ip_addr(&mut self) -> Option<IpAddr> {
-        self.read_ipv4_addr().map(IpAddr::V4).or_else(move || self.read_ipv6_addr().map(IpAddr::V6))
+        self.read_ipv4_addr()
+            .map(IpAddr::V4)
+            .or_else(move || self.read_ipv6_addr().map(IpAddr::V6))
     }
 
     /// Read a `:` followed by a port in base 10.
@@ -307,7 +330,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Read an IPv4 address with a port.
- pub(crate)   fn read_socket_addr_v4(&mut self) -> Option<SocketAddrV4> {
+    pub(crate) fn read_socket_addr_v4(&mut self) -> Option<SocketAddrV4> {
         self.read_atomically(|p| {
             let ip = p.read_ipv4_addr()?;
             let port = p.read_port()?;
@@ -332,27 +355,25 @@ impl<'a> Parser<'a> {
     pub(crate) fn read_socket_addr(&mut self) -> Option<SocketAddr> {
         self.read_socket_addr_v4()
             .map(SocketAddr::V4)
-            .or_else(|| self.read_socket_addr_v6().map(SocketAddr::V6)).or_else(||self.read_socket_addr_scion().map(SocketAddr::SCION))
+            .or_else(|| self.read_socket_addr_v6().map(SocketAddr::V6))
+            .or_else(|| self.read_socket_addr_scion().map(SocketAddr::SCION))
     }
 
-    pub(crate) fn read_socket_addr_scion(&mut self)-> Option<SocketAddrScion>
-    {
-        self.read_atomically ( |p|{
+    pub(crate) fn read_socket_addr_scion(&mut self) -> Option<SocketAddrScion> {
+        self.read_atomically(|p| {
             let scion_addr = p.read_scion_addr()?;
             let port = p.read_port()?;
 
-            Some( SocketAddrScion::new1(scion_addr,port ) )
+            Some(SocketAddrScion::new1(scion_addr, port))
         })
     }
 }
 
 impl IpAddr {
-
     pub fn parse_ascii(b: &[u8]) -> Result<Self, AddrParseError> {
         Parser::new(b).parse_with(|p| p.read_ip_addr(), AddrKind::Ip)
     }
 }
-
 
 impl FromStr for IpAddr {
     type Err = AddrParseError;
@@ -362,7 +383,6 @@ impl FromStr for IpAddr {
 }
 
 impl Ipv4Addr {
-
     pub fn parse_ascii(b: &[u8]) -> Result<Self, AddrParseError> {
         // don't try to parse if too long
         if b.len() > 15 {
@@ -373,7 +393,6 @@ impl Ipv4Addr {
     }
 }
 
-
 impl FromStr for Ipv4Addr {
     type Err = AddrParseError;
     fn from_str(s: &str) -> Result<Ipv4Addr, AddrParseError> {
@@ -382,12 +401,10 @@ impl FromStr for Ipv4Addr {
 }
 
 impl Ipv6Addr {
-
     pub fn parse_ascii(b: &[u8]) -> Result<Self, AddrParseError> {
         Parser::new(b).parse_with(|p| p.read_ipv6_addr(), AddrKind::Ipv6)
     }
 }
-
 
 impl FromStr for Ipv6Addr {
     type Err = AddrParseError;
@@ -397,14 +414,12 @@ impl FromStr for Ipv6Addr {
 }
 
 impl SocketAddrV4 {
-    
     pub fn parse_ascii(b: &[u8]) -> Result<Self, AddrParseError> {
         Parser::new(b).parse_with(|p| p.read_socket_addr_v4(), AddrKind::SocketV4)
     }
 }
 
-impl ScionAddr{
-    
+impl ScionAddr {
     pub fn parse_ascii(b: &[u8]) -> Result<Self, AddrParseError> {
         Parser::new(b).parse_with(|p| p.read_scion_addr(), AddrKind::Scion)
     }
@@ -418,14 +433,12 @@ impl FromStr for SocketAddrV4 {
 }
 
 impl SocketAddrV6 {
-
     pub fn parse_ascii(b: &[u8]) -> Result<Self, AddrParseError> {
         Parser::new(b).parse_with(|p| p.read_socket_addr_v6(), AddrKind::SocketV6)
     }
 }
 
 impl SocketAddrScion {
-
     pub fn parse_ascii(b: &[u8]) -> Result<Self, AddrParseError> {
         Parser::new(b).parse_with(|p| p.read_socket_addr_scion(), AddrKind::SocketScion)
     }
@@ -451,5 +464,3 @@ impl FromStr for SocketAddrScion {
         Self::parse_ascii(s.as_bytes())
     }
 }
-
-
