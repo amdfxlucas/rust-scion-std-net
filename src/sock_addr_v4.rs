@@ -50,6 +50,20 @@ impl Into<std::net::SocketAddrV4> for SocketAddrV4
     }
 }
 
+impl Into<IpAddr> for SocketAddrV4
+{
+    fn into(self)->IpAddr{
+        IpAddr::V4(self.ip)
+    }
+}
+
+impl Into<std::net::IpAddr> for SocketAddrV4
+{
+    fn into(self)->std::net::IpAddr{
+        std::net::IpAddr::V4(self.ip.into())
+    }
+}
+
 impl SocketAddrV4 {
 
     

@@ -221,3 +221,17 @@ impl Into<std::net::SocketAddrV6> for SocketAddrV6
         std::net::SocketAddrV6::from_str( &self.to_string() ).unwrap()
     }
 }
+
+impl Into<IpAddr> for SocketAddrV6
+{
+    fn into(self)->IpAddr{
+        IpAddr::V6(self.ip)
+    }
+}
+
+impl Into<std::net::IpAddr> for SocketAddrV6
+{
+    fn into(self)-> std::net::IpAddr{
+        std::net::IpAddr::V6(self.ip.into())
+    }
+}
