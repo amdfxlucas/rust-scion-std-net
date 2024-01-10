@@ -117,9 +117,9 @@ pub fn parse_scion_impl(host_scion_addr: &str, port_str: &str) -> (IA_t, ISD_t, 
             .unwrap();
     let captures = re.captures(host_scion_addr).unwrap();
 
-    println!("{}", captures[0].len());
+    /*println!("{}", captures[0].len());
     println!("{}", captures[1].len());
-    println!("{}", captures[2].len());
+    println!("{}", captures[2].len());*/
 
     let isd: ISD_t = captures[1].parse().unwrap();
     let as_str = &captures[2];

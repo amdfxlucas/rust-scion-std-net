@@ -58,6 +58,7 @@ mod tests {
     #[test]
     fn parse_scion_addr()
     {
+
         let b = as_from_dotted_hex("ffaa:1:1067");
         assert_eq!(b, 281105609592935);
 
@@ -88,8 +89,7 @@ ia: 5629130167095399 isd: 19 as: 281105609592935
 
         let s = ScionAddr::from_str("1-150,10.150.0.30");
         assert!(s.is_ok());
-        // 0x150 (hex) is 336(dec)
-        assert_eq!(s.unwrap(), ScionAddr::new1(1, 336, IpAddr::V4(Ipv4Addr::new(10,150,0,30) ) ) );
+        assert_eq!(s.unwrap(), ScionAddr::new1(1, 150, IpAddr::V4(Ipv4Addr::new(10,150,0,30) ) ) );
         
     }
 }

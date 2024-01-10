@@ -33,7 +33,7 @@ macro_rules! impl_helper {
     })*)
 }
 
-impl_helper! { u8 u16 u32 }
+impl_helper! { u8 u16 u32 u64}
 
 pub struct Parser<'a> {
     // Parsing as ASCII, so can use byte array.
@@ -228,53 +228,55 @@ impl<'a> Parser<'a> {
     pub(crate) fn read_scion_addr(&mut self) -> Option<ScionAddr> {
         /* valid AS numbers have:
            - 2x colon ':' and 3x groups of max 4x hex digits i.e. 'ffaa:1:1067'
-           - no colon and 1x group of max 4x hex digits
+           - no colon and 1x group of decimal digits
         */
         fn read_AS(p: &mut Parser<'_>) -> Option<u64> {
-            let mut short_as: bool = false;
+            // parses an AS string of kind 'abcde:f013:4567'
+            let read_dotted_as = |p: &mut Parser<'_>| {
+                let mut n: u8 = 0;
+                p.read_atomically(|p| {
+                    let mut groups: [u32; 3] = [0; 3];
 
-            let mut n: u8 = 0;
-            p.read_atomically(|p| {
-                let mut groups: [u32; 3] = [0; 3];
-
-                for (i, slot) in groups.iter_mut().enumerate() {
-                    match p.read_separator(':', i, |p| p.read_number::<u32>(16, Some(4), true)) {
-                        Some(token) => {
-                            n += 1;
-                            *slot = token;
-                        }
-                        None => {
-                            if n == 1 {
-                                short_as = true;
-                                break;
+                    for (i, slot) in groups.iter_mut().enumerate() {
+                        match p.read_separator(':', i, |p| p.read_number::<u32>(16, Some(4), true))
+                        {
+                            Some(token) => {
+                                n += 1;
+                                *slot = token;
+                            }
+                            None => {
+                                if n == 1 {
+                                    // this is an invalid AS of kind 'stuv:wxyz'
+                                    return None;
+                                }
                             }
                         }
                     }
-                }
+                    // println!("groups: {:?}",groups);
+                    //let as_ : u64 = ( (( groups[0]  <<16 as u64) | (groups[1] <<8 as u64)) as u64| ( groups[2]) as u64 ) as u64 ;
+                    /* let as_ : u64 = ( (( (groups[0]  as u64) <<16) | ((groups[1] as u64 )<<8 )) as u64| ( groups[2]) as u64 ) as u64 ;
+                    Some(as_) */
 
-                if n == 2 {
-                    // this is an erroneous AS number of kind 'stuv:wxyz'
-                    println!("IS_SHORT_AS");
-                    return None;
-                }
+                    // why is this not the same :(  this is really worrying
+                    let as_string =
+                        format!("{:04x}:{:04x}:{:04x}", groups[0], groups[1], groups[2]);
 
-                //  println!("{:?}",groups);
-                //let as_ : u64 = ( (( groups[0]  <<16 as u64) | (groups[1] <<8 as u64)) as u64| ( groups[2]) as u64 ) as u64 ;
-                /* let as_ : u64 = ( (( (groups[0]  as u64) <<16) | ((groups[1] as u64 )<<8 )) as u64| ( groups[2]) as u64 ) as u64 ;
+                    //println!("as_string: {}", as_string);
 
-                Some(as_) */
+                    Some(as_from_dotted_hex(&as_string))
+                })
+            };
 
-                // why is this not the same :(  this is really worrying
-                let as_string = if !short_as {
-                    format!("{:04x}:{:04x}:{:04x}", groups[0], groups[1], groups[2])
-                } else {
-                    format!("{:04x}:{:04x}:{:04x}", 0, 0, groups[0])
-                };
+            // parse a decimal AS number in range 0-281474976710655 (max. 15 digits )
+            let read_decimal_as = |p: &mut Parser<'_>| {
+                p.read_atomically(|p| p.read_number::<u64>(10, Some(15), false))
+            };
 
-                println!("as_string: {}", as_string);
-
-                Some(as_from_dotted_hex(&as_string))
-            })
+            return read_dotted_as(p).or_else(|| {
+                let aas = read_decimal_as(p);
+                //println!("decimal_as: {}",aas.unwrap());
+                aas
+            });
         }
 
         self.read_atomically(|p| {
