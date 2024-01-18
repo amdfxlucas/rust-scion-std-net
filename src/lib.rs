@@ -89,7 +89,10 @@ ia: 5629130167095399 isd: 19 as: 281105609592935
 
         let s = ScionAddr::from_str("1-150,10.150.0.30");
         assert!(s.is_ok());
-        assert_eq!(s.unwrap(), ScionAddr::new1(1, 150, IpAddr::V4(Ipv4Addr::new(10,150,0,30) ) ) );
+        assert_eq!(*s.as_ref().unwrap(), ScionAddr::new1(1, 150, IpAddr::V4(Ipv4Addr::new(10,150,0,30) ) ) );
+
+        let so: SocketAddr = (s.unwrap(),53).into();
+        assert_eq!(so, SocketAddr::from_str("1-150,10.150.0.30:53").unwrap() );
         
     }
 }

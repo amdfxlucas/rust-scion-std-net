@@ -103,12 +103,12 @@ impl<I: Into<IpAddr>> From<(I, u16)> for SocketAddr {
         SocketAddr::new_ip(pieces.0.into(), pieces.1)
     }
 }
-/*
-impl<I: Into<ScionAddr>> From<(I, u16)> for SocketAddr {
-    fn from(pieces: (I, u16)) -> SocketAddr {
-        SocketAddr::new_scion(pieces.0.into(), pieces.1)
+
+impl From<(ScionAddr, u16)> for SocketAddr {
+    fn from(pieces: (ScionAddr, u16)) -> SocketAddr {
+        SocketAddr::new_scion(pieces.0.get_ia(),*pieces.0.get_host(), pieces.1)
     }
-}*/
+}
 
 impl fmt::Debug for SocketAddr {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -237,6 +237,7 @@ impl From<std::net::SocketAddr> for SocketAddr{
 
 impl Into<std::net::SocketAddr> for SocketAddr
 {
+    /// might Err when self is a Scion variant
     fn into(self) -> std::net::SocketAddr
     {
         std::net::SocketAddr::from_str( &self.to_string() ).unwrap()
